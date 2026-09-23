@@ -902,16 +902,6 @@ export default function CashierDashboardPage() {
 
             </form>
 
-            {/* Quick Access Credentials Hint */}
-            <div className="p-3.5 bg-[#EEEBE7]/70 rounded-2xl border border-[#352519]/10 text-xs space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-[#352519]">
-                <ShieldCheck className="w-4 h-4 text-[#352519]" />
-                <span>Info Akses Resmi:</span>
-              </div>
-              <p className="text-[11px] text-[#352519]/80 leading-relaxed pl-5">
-                Username: <code className="font-mono font-bold text-[#352519] bg-white px-1.5 py-0.5 rounded border border-[#352519]/20">admin</code> &nbsp;|&nbsp; Password: <code className="font-mono font-bold text-[#352519] bg-white px-1.5 py-0.5 rounded border border-[#352519]/20">bligus2026</code>
-              </p>
-            </div>
 
           </div>
         </div>
