@@ -1648,7 +1648,7 @@ export default function CashierDashboardPage() {
           </div>
 
           {/* Right Column: POS Cart & Checkout (Cols 8-12) */}
-          <div className="lg:col-span-5 bg-white p-5 rounded-3xl border border-[#352519]/15 shadow-sm space-y-4 sticky top-20">
+          <div className="lg:col-span-5 bg-white p-5 rounded-3xl border border-[#352519]/15 shadow-sm space-y-4 sticky top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
             
             <div className="flex items-center justify-between pb-3 border-b border-[#352519]/10">
               <div className="flex items-center gap-2">
