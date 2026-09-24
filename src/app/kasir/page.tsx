@@ -1394,7 +1394,7 @@ export default function CashierDashboardPage() {
                 
                 // WhatsApp notification message when order is ready for pickup
                 const waReadyMessage = encodeURIComponent(
-                  `Halo Kak *${order.customerName}*! ☕\n\nPesananmu di *BliGus Coffee* dengan No. Pesanan *${order.id}* sudah *SELESAI & SIAP DIAMBIL* di outlet kami ya!\n\nAlamat: Jl. K.H. Samanhudi No.20 Subagan, Karangasem\n📍 Lokasi: https://maps.google.com/?q=BliGus+Coffee+Jl.+K.H.+Samanhudi+No.20+Subagan,+Karangasem\n\nTerima kasih, sampai jumpa! 😊`
+                  `Halo Kak *${order.customerName}*! ☕\n\nPesananmu di *BliGus Coffee* dengan No. Pesanan *${order.id}* sudah *SELESAI & SIAP DIAMBIL* di outlet kami ya!\n\nAlamat: Jl. K.H. Samanhudi No.20 Subagan, Karangasem\n📍 Lokasi: https://maps.app.goo.gl/1ZbeKRsUojTyK1Gb9?g_st=ic\n\nTerima kasih, sampai jumpa! 😊`
                 );
 
                 return (
