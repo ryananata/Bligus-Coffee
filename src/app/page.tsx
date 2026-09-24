@@ -24,8 +24,10 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProducts = async () => {
-    setIsLoading(true);
+  const fetchProducts = async (isBackground = false) => {
+    if (!isBackground) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const { data, error } = await supabase
@@ -51,14 +53,16 @@ export default function Home() {
       console.error(e);
       setError("Gagal memuat menu dari server.");
     } finally {
-      setIsLoading(false);
+      if (!isBackground) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchProducts();
-    // Auto-refresh products every 5 seconds to sync with Kasir
-    const interval = setInterval(fetchProducts, 5000);
+    fetchProducts(false); // Initial load with spinner
+    // Auto-refresh products silently every 5 seconds
+    const interval = setInterval(() => fetchProducts(true), 5000);
     return () => clearInterval(interval);
   }, []);
 
