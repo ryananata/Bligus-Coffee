@@ -61,7 +61,7 @@ export const Hero: React.FC = () => {
             <div className="grid grid-cols-3 gap-3 sm:gap-6 mt-8 pt-6 border-t border-[#352519]/10 w-full max-w-lg">
               <div className="flex flex-col">
                 <span className="text-lg sm:text-xl font-bold text-[#352519]">100%</span>
-                <span className="text-[11px] sm:text-xs text-[#352519]/70">Biji Kopi Pilihan</span>
+                <span className="text-[11px] sm:text-xs text-[#352519]/70">Biji Kopi Robusta</span>
               </div>
               <div className="flex flex-col">
                 <span className="text-lg sm:text-xl font-bold text-[#352519]">Cepat</span>
@@ -93,7 +93,7 @@ export const Hero: React.FC = () => {
                 {/* Centered Image */}
                 <div className="relative w-full h-36 my-2 z-10 flex items-center justify-center">
                   <Image
-                    src="/images/products/Kopi_Susu_BliGus.PNG"
+                    src="/images/products/kopi_susu_bligus.png"
                     alt="Kopi Susu BliGus"
                     fill
                     className="object-contain drop-shadow-xl"
@@ -121,8 +121,8 @@ export const Hero: React.FC = () => {
 
               {/* Little Floating Banner */}
               <div className="mt-3 flex items-center justify-between px-3 py-2 bg-[#EEEBE7] rounded-xl border border-[#352519]/10 text-xs text-[#352519]/80">
-                <span className="font-semibold text-[#352519]">📍 Ambil Langsung di Coffee Shop</span>
-                <span className="text-[11px]">Dipersiapkan segar 5–10 menit</span>
+                <span className="font-semibold text-[#352519]">📍 Ambil langsung di Pick Up Point</span>
+                <span className="text-[11px]">Tentukan jam pengambilan di kolom catatan</span>
               </div>
             </div>
           </div>

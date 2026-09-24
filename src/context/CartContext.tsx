@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useMemo } from "
 import { Product, CartItem, Order, AddOn } from "@/types";
 import { generateOrderId } from "@/utils/orderId";
 import { PRODUCTS } from "@/data/products";
+import { supabase } from "@/utils/supabase";
 
 interface CartContextType {
   items: CartItem[];
@@ -246,10 +247,47 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsCheckoutOpen(false);
 
     try {
-      const existingOrders = JSON.parse(localStorage.getItem("bligus_orders") || "[]");
-      localStorage.setItem("bligus_orders", JSON.stringify([newOrder, ...existingOrders]));
+      // 1. Simpan ke tabel orders
+      const { error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          id: newOrder.id,
+          customer_name: newOrder.customerName,
+          whatsapp: newOrder.whatsapp,
+          notes: newOrder.notes,
+          total_amount: newOrder.total,
+          proof_image: newOrder.proofImage, 
+          status: newOrder.status
+        });
+
+      if (orderError) {
+        console.error("Supabase Order Error:", orderError);
+        throw orderError;
+      }
+
+      // 2. Simpan ke tabel order_items
+      const orderItemsToInsert = items.map((item) => ({
+        order_id: newOrder.id,
+        product_id: item.product.id,
+        product_name: item.product.name,
+        unit_price: item.unitTotalPrice,
+        quantity: item.quantity,
+        subtotal: item.unitTotalPrice * item.quantity,
+        add_ons: item.selectedAddOns.map((a) => `${a.name} (+Rp${a.price.toLocaleString("id-ID")})`)
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItemsToInsert);
+
+      if (itemsError) {
+         console.error("Supabase Order Items Error:", itemsError);
+         throw itemsError;
+      }
+      
     } catch (e) {
-      console.error("Error saving order to localStorage", e);
+      console.error("Error saving order to Supabase", e);
+      alert("Terjadi kesalahan jaringan saat menyimpan pesanan. Tim kami akan segera memeriksanya.");
     }
 
     return newOrder;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Order, OrderItem, Product, AddOn, ProductCategory } from "@/types";
 import { PRODUCTS } from "@/data/products";
 import { getAddOnsForProduct, getAddOnsForCategory } from "@/data/addons";
@@ -51,6 +51,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { supabase } from "@/utils/supabase";
 
 // Initial sample orders for fresh view
 const INITIAL_SAMPLE_ORDERS: Order[] = [
@@ -141,8 +142,8 @@ export default function CashierDashboardPage() {
   // Navigation / View Tabs
   const [activeTab, setActiveTab] = useState<"orders" | "pos" | "reports" | "menu">("orders");
 
-  // Menu Availability State
-  const [menuAvailability, setMenuAvailability] = useState<Record<number, boolean>>({});
+  // Menu State
+  const [dbProducts, setDbProducts] = useState<Product[]>([]);
   // Orders State
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedProof, setSelectedProof] = useState<string | null>(null);
@@ -185,6 +186,15 @@ export default function CashierDashboardPage() {
       setIsAuthenticated(false);
     }
   }, []);
+
+  // Request Notification permission when authenticated
+  useEffect(() => {
+    if (isAuthenticated && "Notification" in window) {
+      if (Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+    }
+  }, [isAuthenticated]);
 
   // Handle Login
   const handleLogin = (e: React.FormEvent) => {
@@ -257,44 +267,104 @@ export default function CashierDashboardPage() {
     }
   };
 
-  // Load orders from localStorage
-  useEffect(() => {
+  const knownOrderIds = useRef<Set<string>>(new Set());
+  const isFirstFetch = useRef<boolean>(true);
+
+  // Load orders from Supabase
+  const fetchOrders = async () => {
     try {
-      const stored = localStorage.getItem("bligus_orders");
-      if (stored !== null) {
-        // Key exists in localStorage (even if empty array — user has cleared before)
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          setOrders(parsed); // Respect cleared state — don't reload sample
+      const { data, error } = await supabase
+        .from("orders")
+        .select(`*, order_items (*)`)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      if (data) {
+        const mappedOrders: Order[] = data.map(o => ({
+          id: o.id,
+          customerName: o.customer_name,
+          whatsapp: o.whatsapp,
+          notes: o.notes || undefined,
+          total: o.total_amount,
+          status: o.status,
+          proofImage: o.proof_image,
+          createdAt: o.created_at,
+          items: (o.order_items || []).map((i: any) => ({
+            id: i.product_id,
+            name: i.product_name,
+            price: i.unit_price,
+            unitTotalPrice: i.unit_price,
+            quantity: i.quantity,
+            subtotal: i.subtotal,
+            addOns: i.add_ons || []
+          }))
+        }));
+
+        if (isFirstFetch.current) {
+          // Initialize known IDs without triggering notifications on first load
+          mappedOrders.forEach(o => knownOrderIds.current.add(o.id));
+          isFirstFetch.current = false;
+        } else {
+          // Check for new orders
+          const newOrders = mappedOrders.filter(o => !knownOrderIds.current.has(o.id));
+          if (newOrders.length > 0) {
+            newOrders.forEach(o => knownOrderIds.current.add(o.id));
+            
+            playChime();
+            
+            // Trigger Browser Notification if permission granted
+            if ("Notification" in window && Notification.permission === "granted") {
+              const latestOrder = newOrders[0];
+              new Notification("Pesanan Baru Masuk! 🔔", {
+                body: `${latestOrder.customerName} memesan ${latestOrder.items.length} menu senilai ${formatRupiah(latestOrder.total)}. Segera cek dashboard kasir!`,
+              });
+            }
+          }
         }
-      } else {
-        // First visit — no key yet, load sample orders as demo
-        setOrders(INITIAL_SAMPLE_ORDERS);
-        localStorage.setItem(
-          "bligus_orders",
-          JSON.stringify(INITIAL_SAMPLE_ORDERS)
-        );
+        
+        setOrders(mappedOrders);
       }
     } catch (e) {
       console.error(e);
-      setOrders(INITIAL_SAMPLE_ORDERS);
     }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    // Auto-refresh every 5 seconds for Realtime feel
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  // Load menu availability from localStorage
-  useEffect(() => {
+  // Load products from Supabase
+  const fetchDbProducts = async () => {
     try {
-      const stored = localStorage.getItem("bligus_menu_availability");
-      if (stored) {
-        setMenuAvailability(JSON.parse(stored));
-      } else {
-        const defaultAvail = PRODUCTS.reduce((acc, p) => ({ ...acc, [p.id]: p.isAvailable }), {});
-        setMenuAvailability(defaultAvail);
-        localStorage.setItem("bligus_menu_availability", JSON.stringify(defaultAvail));
+      const { data, error } = await supabase.from("products").select("*").order("category", { ascending: true }).order("price", { ascending: true });
+      if (error) throw error;
+      if (data) {
+        const mapped: Product[] = data.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          category: row.category as any,
+          price: row.price,
+          description: row.description,
+          image: row.image_url,
+          isAvailable: row.is_available,
+          badge: row.badge,
+        }));
+        setDbProducts(mapped);
       }
     } catch (e) {
       console.error(e);
     }
+  };
+
+  useEffect(() => {
+    fetchDbProducts();
+    const interval = setInterval(fetchDbProducts, 10000);
+    return () => clearInterval(interval);
   }, []);
 
 
@@ -315,65 +385,70 @@ export default function CashierDashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const saveOrders = (updated: Order[]) => {
-    setOrders(updated);
+  const handleUpdateStatus = async (orderId: string, newStatus: Order["status"]) => {
     try {
-      localStorage.setItem("bligus_orders", JSON.stringify(updated));
+      const { error } = await supabase.from("orders").update({ status: newStatus }).eq("id", orderId);
+      if (error) throw error;
+      setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
     } catch (e) {
       console.error(e);
+      alert("Gagal mengupdate status pesanan. Pastikan database mengizinkan UPDATE (RLS Policy).");
     }
-  };
-
-  const handleUpdateStatus = (orderId: string, newStatus: Order["status"]) => {
-    const updated = orders.map((order) =>
-      order.id === orderId ? { ...order, status: newStatus } : order
-    );
-    saveOrders(updated);
   };
 
   const handleClearHistory = () => {
-    if (confirm("Kosongkan seluruh riwayat pesanan?")) {
-      saveOrders([]);
+    alert("Fitur hapus histori dinonaktifkan karena pesanan sudah tersimpan permanen di database Supabase.");
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    try {
+      const { error } = await supabase.from("orders").update({ status: "Dibatalkan" }).eq("id", orderId);
+      if (error) throw error;
+      setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: "Dibatalkan" } : o));
+      setCancelingOrderId(null);
+    } catch (e) {
+      console.error(e);
+      alert("Gagal membatalkan pesanan. Pastikan database mengizinkan UPDATE (RLS Policy).");
     }
   };
 
-  const handleCancelOrder = (orderId: string) => {
-    saveOrders(orders.filter((o) => o.id !== orderId));
-    setCancelingOrderId(null);
+  const handleDeleteOrder = async (orderId: string) => {
+    try {
+      const { error } = await supabase.from("orders").delete().eq("id", orderId);
+      if (error) throw error;
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      setCancelingOrderId(null);
+    } catch (e) {
+      console.error(e);
+      alert("Gagal menghapus pesanan. Pastikan database mengizinkan DELETE (RLS Policy).");
+    }
   };
 
-  const handleAddSample = () => {
+  const handleAddSample = async () => {
     const randomSuffix = Math.floor(100 + Math.random() * 900);
-    const newSample: Order = {
-      id: `BLG-20260917-${randomSuffix}`,
-      customerName: "Pelanggan Online " + randomSuffix,
-      whatsapp: "081234567890",
-      notes: "Extra sedap, es sedang",
-      items: [
+    const newSampleId = `BLG-20260917-${randomSuffix}`;
+    try {
+      await supabase.from('orders').insert({
+        id: newSampleId,
+        customer_name: "Pelanggan Online " + randomSuffix,
+        whatsapp: "081234567890",
+        notes: "Extra sedap, es sedang",
+        total_amount: 36000,
+        status: "Menunggu Diproses"
+      });
+      await supabase.from('order_items').insert([
         {
-          id: 1,
-          name: "Kopi Susu BliGus",
-          price: 18000,
-          unitTotalPrice: 21000,
-          quantity: 1,
-          subtotal: 21000,
-          addOns: ["+1 Shot Espresso (+Rp3.000)"],
+          order_id: newSampleId, product_id: 1, product_name: "Kopi Susu BliGus", unit_price: 21000, quantity: 1, subtotal: 21000, add_ons: ["+1 Shot Espresso (+Rp3.000)"]
         },
         {
-          id: 6,
-          name: "Cappuccino",
-          price: 15000,
-          unitTotalPrice: 15000,
-          quantity: 1,
-          subtotal: 15000,
-        },
-      ],
-      total: 36000,
-      status: "Menunggu Diproses",
-      createdAt: new Date().toISOString(),
-    };
-    saveOrders([newSample, ...orders]);
-    playChime();
+          order_id: newSampleId, product_id: 6, product_name: "Cappuccino", unit_price: 15000, quantity: 1, subtotal: 15000, add_ons: []
+        }
+      ]);
+      fetchOrders();
+      playChime();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   // Helper: detect if order was from POS / Kasir
@@ -381,16 +456,20 @@ export default function CashierDashboardPage() {
     typeof o.notes === "string" &&
     (o.notes.startsWith("[Kasir") || o.notes.startsWith("[Pesanan Kasir"));
 
-  // Filtered orders — antrean ONLY shows online orders (POS orders are auto-completed)
+  // Filtered orders
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
-      if (isPosOrder(order)) return false; // POS orders never in antrean
       const matchStatus =
         filterStatus === "Semua" || order.status === filterStatus;
       const matchSearch =
         order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         order.whatsapp.includes(searchQuery);
+        
+      if (isPosOrder(order)) {
+         if (filterStatus !== "Semua" && filterStatus !== "Selesai") return false;
+      }
+      
       return matchStatus && matchSearch;
     });
   }, [orders, filterStatus, searchQuery]);
@@ -506,31 +585,40 @@ export default function CashierDashboardPage() {
   // POS ACTIONS & LOGIC
   // ==========================================
   const filteredProducts = useMemo(() => {
-    return PRODUCTS.filter((p) => {
+    return dbProducts.filter((p) => {
       const matchCat = posCategory === "Semua" || p.category === posCategory;
       const matchSearch = p.name
         .toLowerCase()
         .includes(posSearch.toLowerCase());
       
-      const isAvail = menuAvailability[p.id] !== undefined ? menuAvailability[p.id] : p.isAvailable;
-      
-      return matchCat && matchSearch && isAvail;
+      return matchCat && matchSearch && p.isAvailable;
     });
-  }, [posCategory, posSearch, menuAvailability]);
+  }, [posCategory, posSearch, dbProducts]);
 
-  const toggleMenuAvailability = (productId: number) => {
-    setMenuAvailability((prev) => {
-      const updated = {
-        ...prev,
-        [productId]: prev[productId] !== undefined ? !prev[productId] : false,
-      };
-      try {
-        localStorage.setItem("bligus_menu_availability", JSON.stringify(updated));
-      } catch (e) {
-        console.error(e);
-      }
-      return updated;
-    });
+  const toggleMenuAvailability = async (productId: number) => {
+    const prod = dbProducts.find(p => p.id === productId);
+    if (!prod) return;
+    const newStatus = !prod.isAvailable;
+    
+    // Optimistic update
+    setDbProducts(prev => prev.map(p => p.id === productId ? { ...p, isAvailable: newStatus } : p));
+    
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .update({ is_available: newStatus })
+        .eq("id", productId)
+        .select()
+        .single();
+        
+      if (error) throw error;
+      if (!data) throw new Error("Update blocked by RLS");
+    } catch (e: any) {
+      console.error("Toggle error:", e);
+      alert(`Gagal mengupdate menu. Pesan error: ${e.message || "Pastikan Anda sudah Run SQL RLS Policy"}`);
+      // Revert on error
+      setDbProducts(prev => prev.map(p => p.id === productId ? { ...p, isAvailable: prod.isAvailable } : p));
+    }
   };
 
   const handleOpenCustomization = (product: Product) => {
@@ -647,7 +735,7 @@ export default function CashierDashboardPage() {
     return 0;
   }, [posCashAmount, posTotal, posPaymentMethod]);
 
-  const handleProcessPosOrder = () => {
+  const handleProcessPosOrder = async () => {
     if (posCart.length === 0) {
       alert("Pilih minimal satu menu untuk membuat pesanan!");
       return;
@@ -657,16 +745,15 @@ export default function CashierDashboardPage() {
       .toISOString()
       .slice(0, 10)
       .replace(/-/g, "")}-${Math.floor(100 + Math.random() * 900)}`;
-    const orderItems: OrderItem[] = posCart.map((item) => ({
-      id: item.product.id,
-      name: item.product.name,
-      price: item.product.price,
-      unitTotalPrice: item.unitTotalPrice,
+
+    const orderItemsToInsert = posCart.map((item) => ({
+      order_id: orderNumber,
+      product_id: item.product.id,
+      product_name: item.product.name,
+      unit_price: item.unitTotalPrice,
       quantity: item.quantity,
       subtotal: item.subtotal,
-      addOns: item.selectedAddOns.map(
-        (a) => `${a.name} (+${formatRupiah(a.price)})`
-      ),
+      add_ons: item.selectedAddOns.map((a) => `${a.name} (+${formatRupiah(a.price)})`)
     }));
 
     const newOrder: Order = {
@@ -676,24 +763,38 @@ export default function CashierDashboardPage() {
       notes: posNotes.trim()
         ? `[Kasir - ${posPaymentMethod}] ${posNotes}`
         : `[Pesanan Kasir - ${posPaymentMethod}]`,
-      items: orderItems,
+      items: posCart.map(i => ({
+        id: i.product.id, name: i.product.name, price: i.product.price, unitTotalPrice: i.unitTotalPrice, quantity: i.quantity, subtotal: i.subtotal, addOns: i.selectedAddOns.map(a => a.name)
+      })),
       total: posTotal,
-      status: "Selesai", // POS orders are auto-completed immediately
+      status: "Selesai",
       createdAt: new Date().toISOString(),
     };
 
-    saveOrders([newOrder, ...orders]);
-    playChime();
+    try {
+      await supabase.from("orders").insert({
+        id: newOrder.id,
+        customer_name: newOrder.customerName,
+        whatsapp: newOrder.whatsapp,
+        notes: newOrder.notes,
+        total_amount: newOrder.total,
+        status: newOrder.status
+      });
+      await supabase.from("order_items").insert(orderItemsToInsert);
+      
+      setOrders([newOrder, ...orders]);
+      playChime();
+      setReceiptOrder(newOrder);
 
-    // Open receipt modal
-    setReceiptOrder(newOrder);
-
-    // Reset POS form
-    setPosCart([]);
-    setPosCustomerName("");
-    setPosCustomerPhone("");
-    setPosNotes("");
-    setPosCashAmount(0);
+      setPosCart([]);
+      setPosCustomerName("");
+      setPosCustomerPhone("");
+      setPosNotes("");
+      setPosCashAmount(0);
+    } catch (e) {
+      console.error(e);
+      alert("Gagal memproses pesanan Kasir");
+    }
   };
 
   const handlePrintReceipt = () => {
@@ -1293,7 +1394,7 @@ export default function CashierDashboardPage() {
                 
                 // WhatsApp notification message when order is ready for pickup
                 const waReadyMessage = encodeURIComponent(
-                  `Halo Kak *${order.customerName}*! ☕\n\nPesananmu di *BliGus Coffee* dengan No. Pesanan *${order.id}* sudah *SELESAI & SIAP DIAMBIL* di outlet kami ya!\n\nAlamat: Jl. K.H. Samanhudi No.20 Subagan, Karangasem\n\nTerima kasih, sampai jumpa! 😊`
+                  `Halo Kak *${order.customerName}*! ☕\n\nPesananmu di *BliGus Coffee* dengan No. Pesanan *${order.id}* sudah *SELESAI & SIAP DIAMBIL* di outlet kami ya!\n\nAlamat: Jl. K.H. Samanhudi No.20 Subagan, Karangasem\n📍 Lokasi: https://maps.google.com/?q=BliGus+Coffee+Jl.+K.H.+Samanhudi+No.20+Subagan,+Karangasem\n\nTerima kasih, sampai jumpa! 😊`
                 );
 
                 return (
@@ -1503,38 +1604,41 @@ export default function CashierDashboardPage() {
                         )}
                       </div>
 
-                      {/* Cancel Button — only for non-completed orders */}
-                      {currentStatus !== "Selesai" && (
-                        cancelingOrderId === order.id ? (
-                          // Inline confirmation
-                          <div className="mt-1 p-3 rounded-xl bg-red-50 border border-red-200 space-y-2">
-                            <p className="text-xs font-bold text-red-700 text-center">
-                              Yakin batalkan pesanan <span className="font-mono">{order.id}</span>?
-                            </p>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleCancelOrder(order.id)}
-                                className="flex-1 py-2 rounded-xl bg-red-600 text-white text-xs font-black hover:bg-red-700 active:scale-95 transition-all"
-                              >
-                                Ya, Batalkan
-                              </button>
-                              <button
-                                onClick={() => setCancelingOrderId(null)}
-                                className="flex-1 py-2 rounded-xl bg-white text-[#352519] border border-[#352519]/20 text-xs font-bold hover:bg-[#EEEBE7] active:scale-95 transition-all"
-                              >
-                                Tidak
-                              </button>
-                            </div>
+                      {/* Cancel / Delete Button */}
+                      {cancelingOrderId === order.id ? (
+                        <div className="mt-1 p-3 rounded-xl bg-red-50 border border-red-200 space-y-2">
+                          <p className="text-xs font-bold text-red-700 text-center">
+                            {(currentStatus === "Selesai" || currentStatus === "Dibatalkan")
+                              ? `Yakin HAPUS pesanan ${order.id} dari histori?` 
+                              : `Yakin batalkan pesanan ${order.id}?`}
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => (currentStatus === "Selesai" || currentStatus === "Dibatalkan") ? handleDeleteOrder(order.id) : handleCancelOrder(order.id)}
+                              className="flex-1 py-2 rounded-xl bg-red-600 text-white text-xs font-black hover:bg-red-700 active:scale-95 transition-all"
+                            >
+                              Ya, {(currentStatus === "Selesai" || currentStatus === "Dibatalkan") ? "Hapus" : "Batalkan"}
+                            </button>
+                            <button
+                              onClick={() => setCancelingOrderId(null)}
+                              className="flex-1 py-2 rounded-xl bg-white text-[#352519] border border-[#352519]/20 text-xs font-bold hover:bg-[#EEEBE7] active:scale-95 transition-all"
+                            >
+                              Tidak
+                            </button>
                           </div>
-                        ) : (
-                          <button
-                            onClick={() => setCancelingOrderId(order.id)}
-                            className="w-full mt-1 py-2 rounded-xl bg-red-50 text-red-600 border border-red-200 text-xs font-bold hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1.5"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                            <span>Batalkan Pesanan</span>
-                          </button>
-                        )
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setCancelingOrderId(order.id)}
+                          className={`w-full mt-1 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5 ${
+                            (currentStatus === "Selesai" || currentStatus === "Dibatalkan") 
+                              ? "bg-gray-50 text-gray-500 border border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                              : "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                          }`}
+                        >
+                          {(currentStatus === "Selesai" || currentStatus === "Dibatalkan") ? <Trash2 className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                          <span>{(currentStatus === "Selesai" || currentStatus === "Dibatalkan") ? "Hapus Histori Pesanan" : "Batalkan Pesanan"}</span>
+                        </button>
                       )}
                     </div>
 
@@ -2359,8 +2463,8 @@ export default function CashierDashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {PRODUCTS.map((product) => {
-              const isAvailable = menuAvailability[product.id] !== undefined ? menuAvailability[product.id] : product.isAvailable;
+            {dbProducts.map((product) => {
+              const isAvailable = product.isAvailable;
 
               return (
                 <div key={product.id} className={`bg-white p-4 rounded-3xl border ${isAvailable ? 'border-[#352519]/20' : 'border-red-500/30 opacity-75'} shadow-sm flex flex-col justify-between transition-all`}>

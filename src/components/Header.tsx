@@ -82,12 +82,6 @@ export const Header: React.FC = () => {
           >
             Kontak & Lokasi
           </button>
-          <a
-            href="/kasir"
-            className="px-3 py-1 rounded-xl bg-[#352519]/8 hover:bg-[#352519] hover:text-[#EEEBE7] text-xs font-bold text-[#352519] transition-all border border-[#352519]/15"
-          >
-            Dashboard Kasir
-          </a>
         </nav>
 
         {/* Action Controls (Cart & Mobile Menu Trigger) */}
@@ -143,12 +137,6 @@ export const Header: React.FC = () => {
             >
               Kontak & Jam Buka
             </button>
-            <a
-              href="/kasir"
-              className="text-left py-2.5 px-3 rounded-lg bg-[#352519] text-[#EEEBE7] font-bold text-xs"
-            >
-              🔒 Buka Dashboard Kasir
-            </a>
           </div>
         </div>
       )}

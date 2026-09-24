@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Product } from "@/types";
 import { useCart } from "@/context/CartContext";
 import { formatRupiah } from "@/utils/formatters";
+import { isStoreOpen } from "@/utils/storeHours";
 import { Plus, Minus, AlertCircle, Sparkles, SlidersHorizontal, ThumbsUp, Flame } from "lucide-react";
 import Image from "next/image";
 
@@ -24,6 +25,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const totalQuantity = getProductTotalQuantity(product.id);
   const isOutOfStock = !product.isAvailable;
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [storeOpen, setStoreOpen] = useState(true);
+
+  useEffect(() => {
+    setStoreOpen(isStoreOpen());
+  }, []);
+
+  const isUnavailable = isOutOfStock || !storeOpen;
 
   // Find standard (no-addon) item if present in cart
   const standardCartItem = items.find(
@@ -32,7 +40,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const anyCartItem = items.find((item) => item.product.id === product.id);
 
   const handleCardAddClick = () => {
-    setCustomizingProduct(product);
+    if (!isUnavailable) {
+      setCustomizingProduct(product);
+    }
   };
 
   const handleQuickIncrease = () => {
@@ -54,6 +64,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   };
 
   const getAvailabilityBadge = () => {
+    if (!storeOpen) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#352519]/20 text-[#352519] border border-[#352519]/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#352519]" />
+          Toko Tutup
+        </span>
+      );
+    }
     if (isOutOfStock) {
       return (
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#352519]/20 text-[#352519] border border-[#352519]/30">
@@ -82,7 +100,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       <div>
         {/* Product Image Area */}
         <div
-          onClick={() => !isOutOfStock && setCustomizingProduct(product)}
+          onClick={() => !isUnavailable && setCustomizingProduct(product)}
           className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-gradient-to-b from-[#352519]/5 to-[#352519]/10 border border-[#352519]/10 mb-4 cursor-pointer p-2 flex items-center justify-center"
         >
           <Image
@@ -162,16 +180,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <button
             id={`add-btn-${product.id}`}
             onClick={handleCardAddClick}
-            disabled={isOutOfStock}
+            disabled={isUnavailable}
             className={`w-full py-2.5 sm:py-3 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#352519]/40 ${
-              isOutOfStock
+              isUnavailable
                 ? "bg-[#352519]/10 text-[#352519]/40 cursor-not-allowed border border-[#352519]/10"
                 : "bg-[#352519] text-[#EEEBE7] hover:bg-[#251910] active:scale-[0.98] shadow-sm"
             }`}
-            aria-label={isOutOfStock ? `${product.name} tidak tersedia` : `Pesan ${product.name}`}
+            aria-label={!storeOpen ? "Toko Tutup" : isOutOfStock ? `${product.name} tidak tersedia` : `Pesan ${product.name}`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span>+ Kustom / Tambah</span>
+            <span>{!storeOpen ? "Toko Tutup" : "+ Kustom / Tambah"}</span>
           </button>
         ) : (
           <div className="flex flex-col gap-1.5">
@@ -195,7 +213,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               <button
                 id={`card-inc-${product.id}`}
                 onClick={handleQuickIncrease}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all focus:outline-none bg-[#352519] text-[#EEEBE7] hover:bg-[#251910] active:scale-90 border-[#352519] shadow-sm`}
+                disabled={isUnavailable}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all focus:outline-none shadow-sm ${
+                  isUnavailable 
+                    ? "bg-[#352519]/10 text-[#352519]/40 border-[#352519]/10 cursor-not-allowed" 
+                    : "bg-[#352519] text-[#EEEBE7] hover:bg-[#251910] active:scale-90 border-[#352519]"
+                }`}
                 aria-label={`Tambah jumlah ${product.name}`}
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />

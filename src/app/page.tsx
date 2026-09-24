@@ -13,6 +13,7 @@ import { OrderConfirmation } from "@/components/OrderConfirmation";
 import { Toast } from "@/components/Toast";
 import { Footer } from "@/components/Footer";
 import { PRODUCTS } from "@/data/products";
+import { supabase } from "@/utils/supabase";
 import { Product } from "@/types";
 import { Search, Sparkles, X } from "lucide-react";
 
@@ -23,33 +24,56 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchProducts = async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      const savedAvailability = localStorage.getItem("bligus_menu_availability");
-      if (savedAvailability) {
-        const availabilityMap = JSON.parse(savedAvailability);
-        setProducts(PRODUCTS.map(p => ({
-          ...p,
-          isAvailable: availabilityMap[p.id] !== undefined ? availabilityMap[p.id] : p.isAvailable
-        })));
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .order("id", { ascending: true });
+
+      if (error) throw error;
+      if (data && data.length > 0) {
+        const dbProducts: Product[] = data.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          category: p.category,
+          description: p.description,
+          price: p.price,
+          image: p.image_url,
+          isAvailable: p.is_available,
+          badge: p.badge,
+        }));
+        setProducts(dbProducts);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setError("Gagal memuat menu dari server.");
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+    // Auto-refresh products every 5 seconds to sync with Kasir
+    const interval = setInterval(fetchProducts, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // Category counts calculation for all series
   const itemCounts = useMemo(() => {
     return {
-      Semua: PRODUCTS.length,
-      "Signature Series": PRODUCTS.filter((p) => p.category === "Signature Series").length,
-      "Coffee Series": PRODUCTS.filter((p) => p.category === "Coffee Series").length,
-      "Americano Series": PRODUCTS.filter((p) => p.category === "Americano Series").length,
-      "Non-Coffee Series": PRODUCTS.filter((p) => p.category === "Non-Coffee Series").length,
-      "BliGus Gabin": PRODUCTS.filter((p) => p.category === "BliGus Gabin").length,
-      "Combo / Bundling": PRODUCTS.filter((p) => p.category === "Combo / Bundling").length,
+      Semua: products.length,
+      "Signature Series": products.filter((p) => p.category === "Signature Series").length,
+      "Coffee Series": products.filter((p) => p.category === "Coffee Series").length,
+      "Americano Series": products.filter((p) => p.category === "Americano Series").length,
+      "Non-Coffee Series": products.filter((p) => p.category === "Non-Coffee Series").length,
+      "BliGus Gabin": products.filter((p) => p.category === "BliGus Gabin").length,
+      "Combo / Bundling": products.filter((p) => p.category === "Combo / Bundling").length,
     };
-  }, []);
+  }, [products]);
 
   // Filter & Search logic
   const filteredProducts = useMemo(() => {
@@ -64,25 +88,7 @@ export default function Home() {
   }, [products, selectedCategory, searchQuery]);
 
   const handleRetry = () => {
-    setIsLoading(true);
-    setError(null);
-    setTimeout(() => {
-      try {
-        const savedAvailability = localStorage.getItem("bligus_menu_availability");
-        let newProducts = PRODUCTS;
-        if (savedAvailability) {
-          const availabilityMap = JSON.parse(savedAvailability);
-          newProducts = PRODUCTS.map(p => ({
-            ...p,
-            isAvailable: availabilityMap[p.id] !== undefined ? availabilityMap[p.id] : p.isAvailable
-          }));
-        }
-        setProducts(newProducts);
-      } catch (e) {
-        setProducts(PRODUCTS);
-      }
-      setIsLoading(false);
-    }, 400);
+    fetchProducts();
   };
 
   return (

@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { CartItem } from "./CartItem";
 import { formatRupiah } from "@/utils/formatters";
+import { isStoreOpen } from "@/utils/storeHours";
 import { X, ShoppingBag, ArrowRight, Coffee } from "lucide-react";
 
 export const CartDrawer: React.FC = () => {
@@ -16,6 +17,12 @@ export const CartDrawer: React.FC = () => {
     subtotal,
     clearCart,
   } = useCart();
+
+  const [storeOpen, setStoreOpen] = useState(true);
+
+  useEffect(() => {
+    setStoreOpen(isStoreOpen());
+  }, []);
 
   // Prevent background scrolling when open
   useEffect(() => {
@@ -141,9 +148,14 @@ export const CartDrawer: React.FC = () => {
               <button
                 id="cart-checkout-btn"
                 onClick={handleProceedToCheckout}
-                className="w-full py-3.5 rounded-2xl bg-[#352519] text-[#EEEBE7] font-bold text-sm sm:text-base hover:bg-[#251910] active:scale-[0.98] transition-all shadow-warm flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-[#352519]/40"
+                disabled={!storeOpen}
+                className={`w-full py-3.5 rounded-2xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all focus:outline-none focus:ring-2 focus:ring-[#352519]/40 ${
+                  !storeOpen
+                    ? "bg-[#352519]/20 text-[#352519]/60 cursor-not-allowed border border-[#352519]/10"
+                    : "bg-[#352519] text-[#EEEBE7] hover:bg-[#251910] active:scale-[0.98] shadow-warm"
+                }`}
               >
-                <span>Lanjut ke Checkout</span>
+                <span>{!storeOpen ? "Toko Sedang Tutup" : "Lanjut ke Checkout"}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

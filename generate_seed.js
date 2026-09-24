@@ -1,9 +1,6 @@
-import { Product } from "@/types";
+const fs = require('fs');
 
-export const PRODUCTS: Product[] = [
-  // ==========================================
-  // 1. SIGNATURE SERIES
-  // ==========================================
+const products = [
   {
     id: 1,
     name: "Kopi Susu BliGus",
@@ -42,10 +39,6 @@ export const PRODUCTS: Product[] = [
     image: "/images/products/burnt_aren.png",
     isAvailable: true,
   },
-
-  // ==========================================
-  // 2. COFFEE SERIES
-  // ==========================================
   {
     id: 5,
     name: "Cafe Latte",
@@ -160,10 +153,6 @@ export const PRODUCTS: Product[] = [
     isAvailable: true,
     badge: "New",
   },
-
-  // ==========================================
-  // 3. AMERICANO SERIES
-  // ==========================================
   {
     id: 17,
     name: "Berry-Cano",
@@ -201,10 +190,6 @@ export const PRODUCTS: Product[] = [
     image: "/images/products/americano.png",
     isAvailable: true,
   },
-
-  // ==========================================
-  // 4. NON-COFFEE SERIES
-  // ==========================================
   {
     id: 21,
     name: "Matcha",
@@ -221,13 +206,9 @@ export const PRODUCTS: Product[] = [
     category: "Non-Coffee Series",
     description: "Cokelat pekat pilihan yang manis dan legit dipadukan dengan susu segar yang memanjakan.",
     price: 12000,
-    image: "/images/products/Chocolate.png", // Note: The previous code had this as Chocolate.PNG, maybe we should keep it as is since it wasn't modified
+    image: "/images/products/Chocolate.png",
     isAvailable: true,
   },
-
-  // ==========================================
-  // 5. BLIGUS GABIN
-  // ==========================================
   {
     id: 23,
     name: "Double Choco",
@@ -282,10 +263,6 @@ export const PRODUCTS: Product[] = [
     image: "/images/products/Tiramisu_Gabin.PNG",
     isAvailable: true,
   },
-
-  // ==========================================
-  // 6. COMBO / BUNDLING
-  // ==========================================
   {
     id: 29,
     name: "BliGus 1",
@@ -303,5 +280,18 @@ export const PRODUCTS: Product[] = [
     price: 30000,
     image: "/images/products/BliGus_Combo_2.PNG",
     isAvailable: true,
-  },
+  }
 ];
+
+let sql = "INSERT INTO products (id, name, category, description, price, image_url, is_available, badge) VALUES\n";
+
+const values = products.map(p => {
+  const name = p.name.replace(/'/g, "''");
+  const desc = p.description.replace(/'/g, "''");
+  const badge = p.badge ? `'${p.badge}'` : "NULL";
+  return `(${p.id}, '${name}', '${p.category}', '${desc}', ${p.price}, '${p.image}', ${p.isAvailable}, ${badge})`;
+});
+
+sql += values.join(",\n") + ";\n";
+
+fs.writeFileSync('c:/Users/USER/BligusCoffee/supabase/seed.sql', sql);
