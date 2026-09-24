@@ -37,7 +37,8 @@ export type OrderStatus =
   | "Menunggu Diproses"
   | "Sedang Diproses"
   | "Siap Diambil"
-  | "Selesai";
+  | "Selesai"
+  | "Dibatalkan";
 
 export type OrderItem = {
   id: number;
