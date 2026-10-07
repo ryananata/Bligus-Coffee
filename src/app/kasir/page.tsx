@@ -466,10 +466,6 @@ export default function CashierDashboardPage() {
         order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         order.whatsapp.includes(searchQuery);
         
-      if (isPosOrder(order)) {
-         if (filterStatus !== "Semua" && filterStatus !== "Selesai") return false;
-      }
-      
       return matchStatus && matchSearch;
     });
   }, [orders, filterStatus, searchQuery]);
@@ -767,7 +763,7 @@ export default function CashierDashboardPage() {
         id: i.product.id, name: i.product.name, price: i.product.price, unitTotalPrice: i.unitTotalPrice, quantity: i.quantity, subtotal: i.subtotal, addOns: i.selectedAddOns.map(a => a.name)
       })),
       total: posTotal,
-      status: "Selesai",
+      status: "Siap Diambil",
       createdAt: new Date().toISOString(),
     };
 
@@ -1363,10 +1359,10 @@ export default function CashierDashboardPage() {
             <div className="py-16 text-center bg-white rounded-3xl border border-[#352519]/15 p-8">
               <ShoppingBag className="w-12 h-12 text-[#352519]/30 mx-auto mb-3" />
               <h3 className="text-base font-bold text-[#352519]">
-                Belum ada antrean pesanan online
+                Belum ada antrean pesanan
               </h3>
               <p className="text-xs text-[#352519]/60 mt-1 max-w-sm mx-auto">
-                Pesanan baru dari website akan muncul di sini. Pesanan lewat kasir (KAP) langsung selesai otomatis dan tidak masuk antrean.
+                Pesanan baru akan muncul di sini. Pesanan dari website dan kasir akan ditampilkan sesuai statusnya.
               </p>
               <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
                 <button
