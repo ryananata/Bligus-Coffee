@@ -396,8 +396,29 @@ export default function CashierDashboardPage() {
     }
   };
 
-  const handleClearHistory = () => {
-    alert("Fitur hapus histori dinonaktifkan karena pesanan sudah tersimpan permanen di database Supabase.");
+  const handleClearHistory = async () => {
+    const isConfirmed = confirm(
+      "Apakah kamu yakin ingin mereset dan MENGHAPUS SEMUA pesanan?\n\nSemua data riwayat pesanan akan terhapus dari database selamanya."
+    );
+
+    if (isConfirmed) {
+      try {
+        // Menghapus semua pesanan dari database Supabase
+        // Menggunakan .neq("id", "0") sebagai trik untuk menghapus semua baris
+        const { error } = await supabase.from("orders").delete().neq("id", "0");
+        
+        if (error) {
+          throw error;
+        }
+
+        // Mengosongkan pesanan di UI
+        setOrders([]);
+        alert("Semua riwayat pesanan berhasil direset dan dihapus!");
+      } catch (e: any) {
+        console.error(e);
+        alert("Gagal menghapus pesanan dari database: " + e.message);
+      }
+    }
   };
 
   const handleCancelOrder = async (orderId: string) => {
