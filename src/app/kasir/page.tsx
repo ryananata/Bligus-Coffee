@@ -820,13 +820,13 @@ export default function CashierDashboardPage() {
     struk += `          TERIMA KASIH\n\n\n`;
 
     try {
-      if (!navigator.usb) {
+      if (!(navigator as any).usb) {
         // Fallback ke browser print jika WebUSB tidak didukung
         window.print();
         return;
       }
 
-      const device = await navigator.usb.requestDevice({ filters: [] });
+      const device = await (navigator as any).usb.requestDevice({ filters: [] });
       await device.open();
       if (device.configuration === null) await device.selectConfiguration(1);
       

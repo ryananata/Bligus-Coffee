@@ -56,13 +56,13 @@ export const OrderConfirmation: React.FC = () => {
 
     try {
       // Pastikan browser mendukung WebUSB API
-      if (!navigator.usb) {
+      if (!(navigator as any).usb) {
         alert("Browser ini tidak mendukung cetak langsung via USB (WebUSB API). Gunakan Chrome untuk Android/PC.");
         return;
       }
 
       // Meminta pengguna memilih printer (tanpa filter spesifik agar semua USB muncul)
-      const device = await navigator.usb.requestDevice({ filters: [] });
+      const device = await (navigator as any).usb.requestDevice({ filters: [] });
       
       await device.open();
       
