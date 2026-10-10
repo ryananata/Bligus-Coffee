@@ -13,6 +13,7 @@ import {
   Sparkles,
   ShoppingBag,
   ImageIcon,
+  Printer,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -26,6 +27,99 @@ export const OrderConfirmation: React.FC = () => {
     const element = document.getElementById("menu-section");
     if (element) {
       element.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  const handlePrintReceipt = async () => {
+    // Format untuk printer thermal 58mm (kurang lebih 32 karakter per baris)
+    let struk = `          BLIGUS COFFEE\n`;
+    struk += `--------------------------------\n`;
+    struk += `No: ${lastOrder.id}\n`;
+    struk += `Nama: ${lastOrder.customerName}\n`;
+    struk += `--------------------------------\n`;
+    
+    lastOrder.items.forEach(item => {
+      struk += `${item.name}\n`;
+      const qtyPrice = `${item.quantity}x ${item.unitTotalPrice || item.price}`;
+      const subtotal = `${item.subtotal}`;
+      const spaceCount = Math.max(1, 32 - qtyPrice.length - subtotal.length);
+      struk += `${qtyPrice}${" ".repeat(spaceCount)}${subtotal}\n`;
+    });
+    
+    struk += `--------------------------------\n`;
+    const totalText = "TOTAL";
+    const totalAmt = `${lastOrder.total}`;
+    const totalSpace = Math.max(1, 32 - totalText.length - totalAmt.length);
+    struk += `${totalText}${" ".repeat(totalSpace)}${totalAmt}\n`;
+    struk += `--------------------------------\n`;
+    struk += `          TERIMA KASIH\n\n\n`;
+
+    try {
+      // Pastikan browser mendukung WebUSB API
+      if (!navigator.usb) {
+        alert("Browser ini tidak mendukung cetak langsung via USB (WebUSB API). Gunakan Chrome untuk Android/PC.");
+        return;
+      }
+
+      // Meminta pengguna memilih printer (tanpa filter spesifik agar semua USB muncul)
+      const device = await navigator.usb.requestDevice({ filters: [] });
+      
+      await device.open();
+      
+      // Pilih konfigurasi default (biasanya 1)
+      if (device.configuration === null) {
+        await device.selectConfiguration(1);
+      }
+      
+      // Cari interface dan endpoint untuk pengiriman data (direction 'out', type 'bulk')
+      let outEndpoint = null;
+      let targetInterface = null;
+
+      for (const iface of device.configuration.interfaces) {
+        for (const endpoint of iface.alternates[0].endpoints) {
+          if (endpoint.direction === 'out' && endpoint.type === 'bulk') {
+            outEndpoint = endpoint.endpointNumber;
+            targetInterface = iface.interfaceNumber;
+            break;
+          }
+        }
+        if (outEndpoint) break;
+      }
+
+      if (outEndpoint === null || targetInterface === null) {
+        throw new Error("Tidak menemukan endpoint printer yang sesuai.");
+      }
+
+      await device.claimInterface(targetInterface);
+
+      // Siapkan perintah ESC/POS
+      const encoder = new TextEncoder();
+      
+      // Init printer (ESC @)
+      const initCmd = new Uint8Array([0x1B, 0x40]); 
+      // Teks struk
+      const textCmd = encoder.encode(struk);
+      // Feed & Cut (LF x3 + GS V 0)
+      const cutCmd = new Uint8Array([0x0A, 0x0A, 0x0A, 0x1D, 0x56, 0x00]); 
+
+      // Gabungkan semua perintah
+      const data = new Uint8Array(initCmd.length + textCmd.length + cutCmd.length);
+      data.set(initCmd, 0);
+      data.set(textCmd, initCmd.length);
+      data.set(cutCmd, initCmd.length + textCmd.length);
+
+      // Kirim data ke printer
+      await device.transferOut(outEndpoint, data);
+
+      // Tutup koneksi dengan bersih
+      await device.releaseInterface(targetInterface);
+      await device.close();
+      
+      alert("Struk berhasil dicetak!");
+
+    } catch (error: any) {
+      console.error(error);
+      alert("Gagal mencetak: " + (error.message || "Pastikan printer menyala dan terhubung."));
     }
   };
 
@@ -201,6 +295,14 @@ export const OrderConfirmation: React.FC = () => {
               <ArrowRight className="w-4 h-4" />
             </button>
 
+            <button
+              onClick={handlePrintReceipt}
+              className="w-full sm:w-auto px-4 py-3.5 rounded-2xl border border-[#352519]/25 bg-white text-[#352519] font-bold text-xs hover:bg-[#352519]/5 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Cetak Struk</span>
+            </button>
+
             <a
               href={`https://wa.me/6285714210505?text=${waMessage}`}
               target="_blank"
@@ -208,7 +310,7 @@ export const OrderConfirmation: React.FC = () => {
               className="w-full sm:w-auto px-4 py-3.5 rounded-2xl border border-[#352519]/25 bg-white text-[#352519] font-bold text-xs hover:bg-[#352519]/5 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
             >
               <MessageCircle className="w-4 h-4 text-green-600" />
-              <span>Kirim ke WhatsApp Admin</span>
+              <span>Kirim WhatsApp</span>
             </a>
           </div>
 

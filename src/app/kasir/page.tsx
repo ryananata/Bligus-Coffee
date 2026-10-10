@@ -793,8 +793,82 @@ export default function CashierDashboardPage() {
     }
   };
 
-  const handlePrintReceipt = () => {
-    if (typeof window !== "undefined") {
+  const handlePrintReceipt = async () => {
+    if (!receiptOrder) return;
+
+    // Format untuk printer thermal 58mm (kurang lebih 32 karakter per baris)
+    let struk = `          BLIGUS COFFEE\n`;
+    struk += `--------------------------------\n`;
+    struk += `No: ${receiptOrder.id}\n`;
+    struk += `Nama: ${receiptOrder.customerName}\n`;
+    struk += `--------------------------------\n`;
+    
+    receiptOrder.items.forEach(item => {
+      struk += `${item.name}\n`;
+      const qtyPrice = `${item.quantity}x ${item.unitTotalPrice || item.price}`;
+      const subtotal = `${item.subtotal}`;
+      const spaceCount = Math.max(1, 32 - qtyPrice.length - subtotal.length);
+      struk += `${qtyPrice}${" ".repeat(spaceCount)}${subtotal}\n`;
+    });
+    
+    struk += `--------------------------------\n`;
+    const totalText = "TOTAL";
+    const totalAmt = `${receiptOrder.total}`;
+    const totalSpace = Math.max(1, 32 - totalText.length - totalAmt.length);
+    struk += `${totalText}${" ".repeat(totalSpace)}${totalAmt}\n`;
+    struk += `--------------------------------\n`;
+    struk += `          TERIMA KASIH\n\n\n`;
+
+    try {
+      if (!navigator.usb) {
+        // Fallback ke browser print jika WebUSB tidak didukung
+        window.print();
+        return;
+      }
+
+      const device = await navigator.usb.requestDevice({ filters: [] });
+      await device.open();
+      if (device.configuration === null) await device.selectConfiguration(1);
+      
+      let outEndpoint = null;
+      let targetInterface = null;
+
+      for (const iface of device.configuration.interfaces) {
+        for (const endpoint of iface.alternates[0].endpoints) {
+          if (endpoint.direction === 'out' && endpoint.type === 'bulk') {
+            outEndpoint = endpoint.endpointNumber;
+            targetInterface = iface.interfaceNumber;
+            break;
+          }
+        }
+        if (outEndpoint) break;
+      }
+
+      if (outEndpoint === null || targetInterface === null) {
+        throw new Error("Tidak menemukan endpoint printer yang sesuai.");
+      }
+
+      await device.claimInterface(targetInterface);
+
+      const encoder = new TextEncoder();
+      const initCmd = new Uint8Array([0x1B, 0x40]); 
+      const textCmd = encoder.encode(struk);
+      const cutCmd = new Uint8Array([0x0A, 0x0A, 0x0A, 0x1D, 0x56, 0x00]); 
+
+      const data = new Uint8Array(initCmd.length + textCmd.length + cutCmd.length);
+      data.set(initCmd, 0);
+      data.set(textCmd, initCmd.length);
+      data.set(cutCmd, initCmd.length + textCmd.length);
+
+      await device.transferOut(outEndpoint, data);
+      await device.releaseInterface(targetInterface);
+      await device.close();
+
+    } catch (error: any) {
+      console.error(error);
+      if (error.name !== 'NotFoundError') { // NotFoundError = user batal milih device
+        alert("Gagal menghubungkan ke printer USB. Fallback ke sistem print PDF bawaan.");
+      }
       window.print();
     }
   };
